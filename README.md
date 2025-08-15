@@ -22,6 +22,7 @@ Ce script désactive automatiquement vMenu quand un joueur entre dans des zones 
 - 🎛️ **Exports** pour intégration avec d'autres scripts
 - 🛡️ **Gestion d'erreurs** robuste avec récupération automatique
 - ⚡ **Vérification adaptative** (plus fréquente en zone, moins fréquente hors zone)
+- 📊 **Système K/D moderne** avec interface élégante et statistiques détaillées
 - 🎨 **Interface améliorée** avec messages multilignes et couleurs
 
 ## 📦 Installation
@@ -102,6 +103,18 @@ Config.DebugMode = false          -- Mode debug (désactiver en production)
 | `/zonestats` | `command.zonestats` | Statistiques globales des zones |
 | `/playerstats <ID>` | `command.zonestats` | Statistiques d'un joueur spécifique |
 | `/reloadblips` | `command.reloadblips` | Recharger les blips des zones |
+| `/topkills` | Aucune | Classement des meilleurs killers |
+| `/topkd` | Aucune | Classement des meilleurs ratios K/D |
+| `/topstreak` | Aucune | Classement des meilleures streaks |
+| `/playerkd <ID>` | Aucune | Voir les stats K/D d'un joueur |
+| `/resetplayerkd <ID>` | `command.resetplayerkd` | Réinitialiser les stats d'un joueur |
+
+### 🎯 Commandes Système K/D
+| Commande | Description | Exemple |
+|----------|-------------|---------|
+| `/stats` | Voir ses propres statistiques K/D | `/stats` |
+| `/resetstats` | Réinitialiser ses stats de session | `/resetstats` |
+| `/togglekd` | Activer/désactiver l'affichage du HUD K/D | `/togglekd` |
 
 ## 🔐 Configuration des Permissions
 
@@ -111,6 +124,7 @@ Ajoutez dans votre `server.cfg` :
 add_ace group.admin command.zonestatus allow
 add_ace group.admin command.zonestats allow
 add_ace group.admin command.reloadblips allow
+add_ace group.admin command.resetplayerkd allow
 add_ace group.admin vmenu.notify allow
 
 # Pour des groupes spécifiques
@@ -166,6 +180,18 @@ local currentZone = exports['vmenu-zone-disabler']:getCurrentZone()
 exports['vmenu-zone-disabler']:forceZoneCheck()
 ```
 
+### 📊 Exports Système K/D
+```lua
+-- Obtenir les statistiques K/D d'un joueur
+local stats = exports['vmenu-zone-disabler']:getPlayerKDStats(playerId)
+
+-- Déclencher manuellement un kill
+exports['vmenu-zone-disabler']:triggerKill(victimName, weapon, headshot, distance)
+
+-- Déclencher manuellement une mort
+exports['vmenu-zone-disabler']:triggerDeath(killerName, weapon, headshot)
+```
+
 ## 🚀 Optimisations et Performance
 
 ### 📈 Améliorations de Performance
@@ -178,6 +204,8 @@ exports['vmenu-zone-disabler']:forceZoneCheck()
 - Nettoyage automatique des joueurs déconnectés
 - Cache intelligent avec expiration automatique
 - Optimisation des boucles et des vérifications
+- Interface K/D optimisée avec rendu conditionnel
+- Système de sauvegarde intelligent des statistiques
 
 ## 🔧 Dépannage
 
@@ -196,7 +224,13 @@ exports['vmenu-zone-disabler']:forceZoneCheck()
 **Performances dégradées :**
 1. Augmentez `Config.CheckInterval` (ex: 2000ms)
 2. Désactivez `Config.DebugMode` en production
+3. Désactivez `Config.EnableKDSystem` si non utilisé
 3. Réduisez le nombre de `Config.DisabledControls`
+
+**Système K/D ne fonctionne pas :**
+1. Vérifiez `Config.EnableKDSystem = true`
+2. Utilisez `/togglekd` pour activer l'affichage
+3. Vérifiez que vous êtes dans une zone PvP
 
 ### 🔍 Mode Debug
 Activez le mode debug dans `config.lua` :
@@ -222,6 +256,33 @@ Le script est conçu pour être **framework-agnostic** et fonctionne avec :
 - Serveurs Standalone
 - Frameworks personnalisés
 
+## 🎯 Système K/D Avancé
+
+### ✨ Fonctionnalités du Système K/D
+- **Interface moderne** avec HUD élégant et animations fluides
+- **Statistiques complètes** : Kills, Deaths, Assists, K/D, KDA, Streaks
+- **Kill Feed en temps réel** avec informations détaillées
+- **Indicateurs de dégâts** visuels et sonores
+- **Classements globaux** automatiques
+- **Sauvegarde persistante** des statistiques
+- **Système de streaks** avec récompenses spéciales
+- **Intégration parfaite** avec les zones PvP
+
+### 🎨 Interface Utilisateur
+- HUD moderne avec design épuré
+- Couleurs personnalisables selon les performances
+- Animations fluides pour les kills/deaths
+- Kill feed avec historique des actions
+- Indicateurs visuels de dégâts
+- Affichage conditionnel selon la zone
+
+### 📊 Statistiques Avancées
+- Ratio K/D et KDA calculés automatiquement
+- Suivi des streaks avec records personnels
+- Temps passé en PvP comptabilisé
+- Classements serveur mis à jour en temps réel
+- Historique des performances par session
+
 ## 📊 Statistiques et Monitoring
 
 ### 📈 Données Collectées
@@ -241,10 +302,23 @@ Zones configurées: 4
 Joueurs avec données de session: 12
 ```
 
+### 📊 Exemple de Statistiques K/D
+```
+=== 📊 MES STATISTIQUES ===
+💀 Kills: 47 | ☠️ Deaths: 23 | 🤝 Assists: 12
+📊 K/D: 2.04 | 📈 KDA: 2.57
+🔥 Streak: 8 | 🏆 Meilleure: 15
+⏱️ Session: 01:23:45
+```
+
 ## 🆕 Changelog
 
 ### Version 2.0.0 (Actuelle)
 - 🔄 Refactorisation complète pour de meilleures performances
+- 📊 **Nouveau système K/D moderne** avec interface élégante
+- 🏆 Classements globaux et statistiques avancées
+- 🎯 Kill feed en temps réel avec indicateurs visuels
+- 🔥 Système de streaks avec récompenses spéciales
 - 📊 Système de statistiques avancé avec données par joueur
 - 🧹 Maintenance automatique et nettoyage des données
 - 🔌 Nouveaux exports pour l'intégration

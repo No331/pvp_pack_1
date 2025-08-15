@@ -101,6 +101,65 @@ Config.CheckInterval = 1000
 -- Affichage des notifications d'entrée/sortie de zone
 Config.ShowNotifications = true
 
+-- ====================================================================
+-- CONFIGURATION DU SYSTÈME K/D
+-- ====================================================================
+
+-- Activer le système de compteur K/D dans les zones PvP
+Config.EnableKDSystem = true
+
+-- Configuration de l'interface K/D
+Config.KDHud = {
+    -- Position du HUD (pourcentage de l'écran)
+    position = {x = 0.02, y = 0.02},
+    
+    -- Couleurs de l'interface
+    colors = {
+        background = {0, 0, 0, 180},
+        primary = {255, 255, 255, 255},
+        kills = {46, 204, 113, 255},      -- Vert
+        deaths = {231, 76, 60, 255},      -- Rouge
+        assists = {52, 152, 219, 255},    -- Bleu
+        streak = {241, 196, 15, 255}      -- Jaune/Or
+    },
+    
+    -- Paramètres de police
+    font = 4,
+    scale = 0.4,
+    
+    -- Affichage automatique en zone PvP
+    autoShow = true,
+    
+    -- Durée d'affichage des messages de kill feed (ms)
+    killFeedDuration = 5000,
+    
+    -- Durée d'affichage des indicateurs de dégâts (ms)
+    damageIndicatorDuration = 2000
+}
+
+-- Configuration des sons
+Config.KDSounds = {
+    kill = {sound = "CHECKPOINT_PERFECT", set = "HUD_MINI_GAME_SOUNDSET"},
+    death = {sound = "CHECKPOINT_MISSED", set = "HUD_MINI_GAME_SOUNDSET"},
+    assist = {sound = "CHECKPOINT_NORMAL", set = "HUD_MINI_GAME_SOUNDSET"},
+    streak = {sound = "MEDAL_BRONZE", set = "HUD_AWARDS"}
+}
+
+-- Configuration des streaks spéciales
+Config.StreakRewards = {
+    {kills = 5, message = "🔥 Killing Spree!", sound = true},
+    {kills = 10, message = "🔥🔥 Dominating!", sound = true},
+    {kills = 15, message = "🔥🔥🔥 Unstoppable!", sound = true},
+    {kills = 20, message = "🔥🔥🔥🔥 GODLIKE!", sound = true}
+}
+
+-- Sauvegarde automatique des statistiques
+Config.KDSave = {
+    autoSaveInterval = 300000,  -- 5 minutes
+    backupInterval = 1800000,   -- 30 minutes
+    maxInactiveDays = 30        -- Supprimer après 30 jours d'inactivité
+}
+
 -- Mode debug pour les développeurs et administrateurs
 -- Active les messages de console détaillés pour le débogage
 Config.DebugMode = false

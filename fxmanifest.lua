@@ -25,8 +25,14 @@ shared_script 'config.lua'
 -- Script côté client (interface utilisateur, détection de zones)
 client_script 'client.lua'
 
+-- Script côté client pour le système K/D
+client_script 'client_kd.lua'
+
 -- Script côté serveur (logs, statistiques, commandes admin)
 server_script 'server.lua'
+
+-- Script côté serveur pour le système K/D
+server_script 'server_kd.lua'
 
 -- ====================================================================
 -- DÉPENDANCES ET COMPATIBILITÉ

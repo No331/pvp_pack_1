@@ -141,6 +141,11 @@ function onEnterRestrictedZone()
     -- Déclencher l'événement personnalisé pour d'autres scripts
     TriggerEvent('vmenu:zoneRestriction', true, currentZone)
     
+    -- Activer le système K/D si configuré
+    if Config.EnableKDSystem then
+        TriggerEvent('kd:enterPvPZone', currentZone)
+    end
+    
     -- Informer le serveur pour les logs et statistiques
     TriggerServerEvent('vmenu:playerEnteredRestrictedZone', 
                       currentZone and currentZone.name or "Zone inconnue")
@@ -165,6 +170,11 @@ function onExitRestrictedZone(previousZone)
     
     -- Déclencher l'événement pour d'autres scripts
     TriggerEvent('vmenu:zoneRestriction', false, previousZone)
+    
+    -- Désactiver le système K/D si configuré
+    if Config.EnableKDSystem then
+        TriggerEvent('kd:exitPvPZone', previousZone)
+    end
     
     -- Informer le serveur
     TriggerServerEvent('vmenu:playerExitedRestrictedZone', 
