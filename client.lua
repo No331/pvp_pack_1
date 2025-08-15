@@ -302,8 +302,13 @@ RegisterCommand("reloadblips", function()
         createZoneBlips()
         TriggerEvent('chat:addMessage', {
             color = {0, 255, 0},
-            args = {"[Zone Admin]", "Blips rechargés avec succès"}
+            args = {"🎯 PVP MODE", "Système K/D activé - Tapez /stats pour vos statistiques"}
         })
+        
+        -- Déclencher l'événement pour le système K/D si activé
+        if Config.EnableKDSystem then
+            TriggerEvent('kd:enterPvPZone', zoneData)
+        end
     end
 end, false)
 
@@ -315,17 +320,9 @@ end, false)
 AddEventHandler('onResourceStop', function(resourceName)
     if GetCurrentResourceName() == resourceName then
         -- Supprimer tous les blips
-        removeZoneBlips()
-        
-        -- Réactiver vMenu au cas où le joueur serait en zone
-        enableVMenu()
-        
-        -- Réinitialiser les variables
-        isInRestrictedZone = false
-        currentZone = nil
-        
-        if Config.DebugMode then
-            print("[vMenu Zone] Script arrêté - Nettoyage effectué")
+        -- Déclencher l'événement de sortie pour le système K/D
+        if Config.EnableKDSystem then
+            TriggerEvent('kd:exitPvPZone', zoneData)
         end
     end
 end)

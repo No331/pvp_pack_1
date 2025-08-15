@@ -85,8 +85,8 @@ Config.DisabledControls = {
 
 -- Messages affichés aux joueurs lors des transitions de zone
 Config.Messages = {
-    enterZone = "~r~⚠ vMenu désactivé~w~ - Vous êtes dans une zone PvP",
-    exitZone = "~g~✓ vMenu réactivé~w~ - Vous avez quitté la zone PvP"
+    enterZone = "~r~⚠ vMenu désactivé~w~ - Zone PvP | ~b~Système K/D activé",
+    exitZone = "~g~✓ vMenu réactivé~w~ - Zone libre | ~y~Stats sauvegardées"
 }
 
 -- ====================================================================
@@ -104,6 +104,83 @@ Config.ShowNotifications = true
 -- ====================================================================
 -- CONFIGURATION DU SYSTÈME K/D
 -- ====================================================================
+
+-- Activer le système de compteur K/D dans les zones PvP
+Config.EnableKDSystem = true
+
+-- Configuration de l'interface K/D
+Config.KDHud = {
+    -- Position du HUD (pourcentage de l'écran)
+    position = {x = 0.02, y = 0.02},
+    
+    -- Couleurs de l'interface
+    colors = {
+        background = {0, 0, 0, 180},
+        primary = {255, 255, 255, 255},
+        kills = {46, 204, 113, 255},      -- Vert
+        deaths = {231, 76, 60, 255},      -- Rouge
+        assists = {52, 152, 219, 255},    -- Bleu
+        streak = {241, 196, 15, 255},     -- Jaune/Or
+        excellent = {46, 204, 113, 255},  -- Vert pour K/D > 2.0
+        good = {241, 196, 15, 255},       -- Jaune pour K/D > 1.5
+        average = {230, 126, 34, 255},    -- Orange pour K/D > 1.0
+        poor = {231, 76, 60, 255}         -- Rouge pour K/D < 1.0
+    },
+    
+    -- Paramètres de police
+    font = 4,
+    scale = 0.4,
+    
+    -- Affichage automatique en zone PvP
+    autoShow = true,
+    
+    -- Durée d'affichage des messages de kill feed (ms)
+    killFeedDuration = 5000,
+    
+    -- Durée d'affichage des indicateurs de dégâts (ms)
+    damageIndicatorDuration = 2000,
+    
+    -- Afficher les headshots dans le kill feed
+    showHeadshots = true,
+    
+    -- Afficher la distance des kills
+    showDistance = true
+}
+
+-- Configuration des sons
+Config.KDSounds = {
+    kill = {sound = "CHECKPOINT_PERFECT", set = "HUD_MINI_GAME_SOUNDSET"},
+    death = {sound = "CHECKPOINT_MISSED", set = "HUD_MINI_GAME_SOUNDSET"},
+    assist = {sound = "CHECKPOINT_NORMAL", set = "HUD_MINI_GAME_SOUNDSET"},
+    streak = {sound = "MEDAL_BRONZE", set = "HUD_AWARDS"},
+    multikill = {sound = "MEDAL_GOLD", set = "HUD_AWARDS"}
+}
+
+-- Configuration des streaks spéciales
+Config.StreakRewards = {
+    {kills = 3, message = "🔥 Triple Kill!", color = {241, 196, 15}, sound = true},
+    {kills = 5, message = "🔥 Killing Spree!", color = {230, 126, 34}, sound = true},
+    {kills = 10, message = "🔥🔥 Dominating!", color = {231, 76, 60}, sound = true},
+    {kills = 15, message = "🔥🔥🔥 Unstoppable!", color = {155, 89, 182}, sound = true},
+    {kills = 20, message = "🔥🔥🔥🔥 GODLIKE!", color = {46, 204, 113}, sound = true},
+    {kills = 25, message = "🔥🔥🔥🔥🔥 LEGENDARY!", color = {52, 152, 219}, sound = true}
+}
+
+-- Sauvegarde automatique des statistiques
+Config.KDSave = {
+    autoSaveInterval = 300000,  -- 5 minutes
+    backupInterval = 1800000,   -- 30 minutes
+    maxInactiveDays = 30,       -- Supprimer après 30 jours d'inactivité
+    enablePersistence = true    -- Sauvegarder entre les sessions
+}
+
+-- Configuration des classements
+Config.Leaderboards = {
+    maxEntries = 50,            -- Nombre maximum d'entrées par classement
+    minDeathsForKD = 5,         -- Minimum de deaths pour apparaître dans le classement K/D
+    updateInterval = 60000,     -- Mise à jour des classements (1 minute)
+    showInChat = true           -- Afficher les classements dans le chat
+}
 
 -- Activer le système de compteur K/D dans les zones PvP
 Config.EnableKDSystem = true

@@ -10,31 +10,27 @@ local playerStats = {
     assists = 0,
     streak = 0,
     bestStreak = 0,
+    multikills = 0,
+    headshots = 0,
     totalDamageDealt = 0,
     totalDamageReceived = 0,
     timeInPvP = 0,
     lastKillTime = 0,
-    sessionStart = GetGameTimer()
+    sessionStart = GetGameTimer(),
+    lastMultikillTime = 0
 }
 
 -- Variables pour l'interface utilisateur
 local showKDHud = false
-local hudPosition = {x = 0.02, y = 0.02} -- Position en pourcentage de l'écran
+local hudPosition = Config.KDHud.position
 local lastDamageTime = 0
 local damageIndicators = {}
 local killFeedMessages = {}
+local streakMessages = {}
+local isInPvPZone = false
 
--- Configuration de l'interface
-local hudConfig = {
-    backgroundColor = {0, 0, 0, 180},
-    primaryColor = {255, 255, 255, 255},
-    killColor = {46, 204, 113, 255},
-    deathColor = {231, 76, 60, 255},
-    assistColor = {52, 152, 219, 255},
-    streakColor = {241, 196, 15, 255},
-    font = 4,
-    scale = 0.4
-}
+-- Configuration de l'interface depuis config.lua
+local hudConfig = Config.KDHud
 
 -- ====================================================================
 -- FONCTIONS UTILITAIRES
@@ -59,13 +55,13 @@ end
 -- Obtenir la couleur selon le ratio K/D
 local function getKDColor(ratio)
     if ratio >= 2.0 then
-        return {46, 204, 113, 255} -- Vert excellent
+        return hudConfig.colors.excellent
     elseif ratio >= 1.5 then
-        return {241, 196, 15, 255} -- Jaune bon
+        return hudConfig.colors.good
     elseif ratio >= 1.0 then
-        return {230, 126, 34, 255} -- Orange moyen
+        return hudConfig.colors.average
     else
-        return {231, 76, 60, 255} -- Rouge faible
+        return hudConfig.colors.poor
     end
 end
 
@@ -83,96 +79,134 @@ local function formatSessionTime()
     end
 end
 
+-- Vérifier si c'est un multikill
+local function checkMultikill()
+    local currentTime = GetGameTimer()
+    if currentTime - playerStats.lastKillTime < 4000 then -- 4 secondes pour multikill
+        playerStats.multikills = playerStats.multikills + 1
+        playerStats.lastMultikillTime = currentTime
+        return true
+    end
+    return false
+end
+
 -- ====================================================================
 -- SYSTÈME D'AFFICHAGE HUD
 -- ====================================================================
 
 -- Dessiner le HUD principal des statistiques
 local function drawKDHud()
-    if not showKDHud then return end
+    if not showKDHud or not isInPvPZone then return end
     
     local x, y = hudPosition.x, hudPosition.y
     local kd = calculateKD()
     local kda = calculateKDA()
     local kdColor = getKDColor(kd)
     
-    -- Fond du HUD avec bordure moderne
-    DrawRect(x + 0.08, y + 0.06, 0.16, 0.12, 
-             hudConfig.backgroundColor[1], hudConfig.backgroundColor[2], 
-             hudConfig.backgroundColor[3], hudConfig.backgroundColor[4])
+    -- Calculer la hauteur dynamique selon le contenu
+    local hudHeight = 0.12
+    if playerStats.streak > 0 then
+        hudHeight = hudHeight + 0.02
+    end
+    if playerStats.headshots > 0 then
+        hudHeight = hudHeight + 0.02
+    end
     
-    -- Bordure gradient
-    DrawRect(x + 0.08, y + 0.001, 0.16, 0.002, 
+    -- Fond du HUD avec bordure moderne et effet de transparence
+    DrawRect(x + 0.08, y + hudHeight/2, 0.16, hudHeight, 
+             hudConfig.colors.background[1], hudConfig.colors.background[2], 
+             hudConfig.colors.background[3], hudConfig.colors.background[4])
+    
+    -- Bordure gradient dynamique selon performance
+    DrawRect(x + 0.08, y + 0.001, 0.16, 0.003, 
              kdColor[1], kdColor[2], kdColor[3], 200)
     
     -- Titre principal
     SetTextFont(hudConfig.font)
     SetTextProportional(1)
-    SetTextScale(0.0, hudConfig.scale + 0.1)
-    SetTextColour(hudConfig.primaryColor[1], hudConfig.primaryColor[2], 
-                  hudConfig.primaryColor[3], hudConfig.primaryColor[4])
+    SetTextScale(0.0, hudConfig.scale + 0.05)
+    SetTextColour(hudConfig.colors.primary[1], hudConfig.colors.primary[2], 
+                  hudConfig.colors.primary[3], hudConfig.colors.primary[4])
     SetTextEntry("STRING")
-    AddTextComponentString("🎯 STATS PVP")
+    AddTextComponentString("🎯 PVP STATS")
     DrawText(x + 0.01, y + 0.01)
     
     -- Statistiques principales
-    local yOffset = 0.03
+    local yOffset = 0.025
     
     -- Kills
     SetTextScale(0.0, hudConfig.scale)
-    SetTextColour(hudConfig.killColor[1], hudConfig.killColor[2], 
-                  hudConfig.killColor[3], hudConfig.killColor[4])
+    local killAlpha = 255
+    if GetGameTimer() - playerStats.lastKillTime < 2000 then
+        killAlpha = math.floor(255 * (math.sin(GetGameTimer() / 100) + 1) / 2) + 128
+    end
+    SetTextColour(hudConfig.colors.kills[1], hudConfig.colors.kills[2], 
+                  hudConfig.colors.kills[3], killAlpha)
     SetTextEntry("STRING")
     AddTextComponentString(string.format("💀 Kills: %d", playerStats.kills))
     DrawText(x + 0.01, y + yOffset)
     
     -- Deaths
-    yOffset = yOffset + 0.02
-    SetTextColour(hudConfig.deathColor[1], hudConfig.deathColor[2], 
-                  hudConfig.deathColor[3], hudConfig.deathColor[4])
+    yOffset = yOffset + 0.018
+    SetTextColour(hudConfig.colors.deaths[1], hudConfig.colors.deaths[2], 
+                  hudConfig.colors.deaths[3], hudConfig.colors.deaths[4])
     SetTextEntry("STRING")
     AddTextComponentString(string.format("☠️ Deaths: %d", playerStats.deaths))
     DrawText(x + 0.01, y + yOffset)
     
     -- Assists
-    yOffset = yOffset + 0.02
-    SetTextColour(hudConfig.assistColor[1], hudConfig.assistColor[2], 
-                  hudConfig.assistColor[3], hudConfig.assistColor[4])
+    yOffset = yOffset + 0.018
+    SetTextColour(hudConfig.colors.assists[1], hudConfig.colors.assists[2], 
+                  hudConfig.colors.assists[3], hudConfig.colors.assists[4])
     SetTextEntry("STRING")
     AddTextComponentString(string.format("🤝 Assists: %d", playerStats.assists))
     DrawText(x + 0.01, y + yOffset)
     
     -- K/D Ratio
-    yOffset = yOffset + 0.02
+    yOffset = yOffset + 0.018
     SetTextColour(kdColor[1], kdColor[2], kdColor[3], kdColor[4])
     SetTextEntry("STRING")
     AddTextComponentString(string.format("📊 K/D: %.2f", kd))
     DrawText(x + 0.01, y + yOffset)
     
     -- KDA Ratio
-    yOffset = yOffset + 0.02
-    SetTextColour(hudConfig.primaryColor[1], hudConfig.primaryColor[2], 
-                  hudConfig.primaryColor[3], hudConfig.primaryColor[4])
+    yOffset = yOffset + 0.018
+    SetTextColour(hudConfig.colors.primary[1], hudConfig.colors.primary[2], 
+                  hudConfig.colors.primary[3], hudConfig.colors.primary[4])
     SetTextEntry("STRING")
     AddTextComponentString(string.format("📈 KDA: %.2f", kda))
     DrawText(x + 0.01, y + yOffset)
     
     -- Streak actuelle
     if playerStats.streak > 0 then
-        yOffset = yOffset + 0.02
-        SetTextColour(hudConfig.streakColor[1], hudConfig.streakColor[2], 
-                      hudConfig.streakColor[3], hudConfig.streakColor[4])
+        yOffset = yOffset + 0.018
+        local streakAlpha = 255
+        if playerStats.streak >= 5 then
+            streakAlpha = math.floor(255 * (math.sin(GetGameTimer() / 150) + 1) / 2) + 128
+        end
+        SetTextColour(hudConfig.colors.streak[1], hudConfig.colors.streak[2], 
+                      hudConfig.colors.streak[3], streakAlpha)
         SetTextEntry("STRING")
         AddTextComponentString(string.format("🔥 Streak: %d", playerStats.streak))
         DrawText(x + 0.01, y + yOffset)
     end
     
+    -- Headshots si présents
+    if playerStats.headshots > 0 then
+        yOffset = yOffset + 0.018
+        SetTextColour(hudConfig.colors.streak[1], hudConfig.colors.streak[2], 
+                      hudConfig.colors.streak[3], 200)
+        SetTextEntry("STRING")
+        AddTextComponentString(string.format("🎯 Headshots: %d", playerStats.headshots))
+        DrawText(x + 0.01, y + yOffset)
+    end
+    
     -- Temps de session (coin droit)
-    SetTextScale(0.0, hudConfig.scale - 0.05)
+    SetTextScale(0.0, hudConfig.scale - 0.08)
     SetTextColour(200, 200, 200, 200)
     SetTextEntry("STRING")
     AddTextComponentString(formatSessionTime())
-    DrawText(x + 0.12, y + 0.01)
+    DrawText(x + 0.11, y + 0.008)
 end
 
 -- Dessiner les indicateurs de dégâts
@@ -181,16 +215,17 @@ local function drawDamageIndicators()
     
     for i = #damageIndicators, 1, -1 do
         local indicator = damageIndicators[i]
-        local timeDiff = currentTime - indicator.time
+        local timeDiff = currentTime - indicator.startTime
         
-        if timeDiff > 2000 then -- Supprimer après 2 secondes
+        if timeDiff > hudConfig.damageIndicatorDuration then
             table.remove(damageIndicators, i)
         else
-            local alpha = math.max(0, 255 - (timeDiff / 2000 * 255))
-            local yOffset = timeDiff / 2000 * 0.05 -- Animation vers le haut
+            local alpha = math.max(0, 255 - (timeDiff / hudConfig.damageIndicatorDuration * 255))
+            local yOffset = timeDiff / hudConfig.damageIndicatorDuration * 0.08
+            local scale = 0.5 + (timeDiff / hudConfig.damageIndicatorDuration * 0.2)
             
             SetTextFont(4)
-            SetTextScale(0.0, 0.5)
+            SetTextScale(0.0, scale)
             SetTextColour(indicator.color[1], indicator.color[2], 
                           indicator.color[3], alpha)
             SetTextEntry("STRING")
@@ -203,28 +238,53 @@ end
 -- Dessiner le kill feed
 local function drawKillFeed()
     local currentTime = GetGameTimer()
-    local yStart = 0.3
+    local yStart = 0.25
     
     for i = #killFeedMessages, 1, -1 do
         local message = killFeedMessages[i]
-        local timeDiff = currentTime - message.time
+        local timeDiff = currentTime - message.startTime
         
-        if timeDiff > 5000 then -- Supprimer après 5 secondes
+        if timeDiff > hudConfig.killFeedDuration then
             table.remove(killFeedMessages, i)
         else
-            local alpha = math.max(0, 255 - (timeDiff / 5000 * 255))
-            local yPos = yStart + ((#killFeedMessages - i) * 0.03)
+            local alpha = math.max(0, 255 - (timeDiff / hudConfig.killFeedDuration * 255))
+            local yPos = yStart + ((#killFeedMessages - i) * 0.025)
             
             -- Fond du message
-            DrawRect(0.85, yPos + 0.01, 0.28, 0.025, 0, 0, 0, alpha * 0.7)
+            DrawRect(0.85, yPos + 0.0125, 0.28, 0.025, 0, 0, 0, math.floor(alpha * 0.8))
             
             SetTextFont(4)
-            SetTextScale(0.0, 0.35)
+            SetTextScale(0.0, 0.32)
             SetTextColour(message.color[1], message.color[2], 
                           message.color[3], alpha)
             SetTextEntry("STRING")
             AddTextComponentString(message.text)
             DrawText(0.72, yPos)
+        end
+    end
+end
+
+-- Dessiner les messages de streak
+local function drawStreakMessages()
+    local currentTime = GetGameTimer()
+    
+    for i = #streakMessages, 1, -1 do
+        local message = streakMessages[i]
+        local timeDiff = currentTime - message.startTime
+        
+        if timeDiff > 3000 then
+            table.remove(streakMessages, i)
+        else
+            local alpha = math.max(0, 255 - (timeDiff / 3000 * 255))
+            local scale = 0.8 + (math.sin(timeDiff / 100) * 0.1)
+            
+            SetTextFont(4)
+            SetTextScale(0.0, scale)
+            SetTextColour(message.color[1], message.color[2], 
+                          message.color[3], alpha)
+            SetTextEntry("STRING")
+            AddTextComponentString(message.text)
+            DrawText(0.5 - (string.len(message.text) * 0.01), 0.3)
         end
     end
 end
@@ -238,46 +298,74 @@ RegisterNetEvent('kd:onKill')
 AddEventHandler('kd:onKill', function(victimName, weapon, headshot, distance)
     playerStats.kills = playerStats.kills + 1
     playerStats.streak = playerStats.streak + 1
-    playerStats.lastKillTime = GetGameTimer()
+    local currentTime = GetGameTimer()
+    
+    -- Vérifier les headshots
+    if headshot then
+        playerStats.headshots = playerStats.headshots + 1
+    end
+    
+    -- Vérifier les multikills
+    local isMultikill = checkMultikill()
+    playerStats.lastKillTime = currentTime
     
     if playerStats.streak > playerStats.bestStreak then
         playerStats.bestStreak = playerStats.streak
     end
     
-    -- Effet sonore de kill
-    PlaySoundFrontend(-1, "CHECKPOINT_PERFECT", "HUD_MINI_GAME_SOUNDSET", 1)
+    -- Effet sonore selon le type de kill
+    if isMultikill then
+        PlaySoundFrontend(-1, Config.KDSounds.multikill.sound, Config.KDSounds.multikill.set, 1)
+    else
+        PlaySoundFrontend(-1, Config.KDSounds.kill.sound, Config.KDSounds.kill.set, 1)
+    end
     
     -- Message de kill feed
-    local killMessage = string.format("💀 %s", victimName or "Joueur")
-    if headshot then
+    local killMessage = string.format("💀 Tué %s", victimName or "Joueur")
+    if headshot and Config.KDHud.showHeadshots then
         killMessage = killMessage .. " 🎯"
     end
-    if distance and distance > 50 then
+    if distance and distance > 50 and Config.KDHud.showDistance then
         killMessage = killMessage .. string.format(" (%.0fm)", distance)
+    end
+    if isMultikill then
+        killMessage = "⚡ " .. killMessage .. " ⚡"
     end
     
     table.insert(killFeedMessages, {
         text = killMessage,
-        time = GetGameTimer(),
-        color = hudConfig.killColor
+        startTime = currentTime,
+        color = hudConfig.colors.kills
     })
     
     -- Indicateur de dégâts pour le kill
     table.insert(damageIndicators, {
-        text = "KILL!",
+        text = isMultikill and "MULTIKILL!" or (headshot and "HEADSHOT!" or "KILL!"),
         x = 0.5,
         y = 0.5,
-        time = GetGameTimer(),
-        color = hudConfig.killColor
+        startTime = currentTime,
+        color = headshot and hudConfig.colors.streak or hudConfig.colors.kills
     })
     
-    -- Notification de streak
-    if playerStats.streak > 1 and playerStats.streak % 5 == 0 then
-        TriggerEvent('chat:addMessage', {
-            color = {241, 196, 15},
-            args = {"🔥 STREAK", string.format("Série de %d kills!", playerStats.streak)}
-        })
-        PlaySoundFrontend(-1, "MEDAL_BRONZE", "HUD_AWARDS", 1)
+    -- Vérifier les récompenses de streak
+    for _, reward in ipairs(Config.StreakRewards) do
+        if playerStats.streak == reward.kills then
+            table.insert(streakMessages, {
+                text = reward.message,
+                startTime = currentTime,
+                color = reward.color
+            })
+            
+            if reward.sound then
+                PlaySoundFrontend(-1, Config.KDSounds.streak.sound, Config.KDSounds.streak.set, 1)
+            end
+            
+            TriggerEvent('chat:addMessage', {
+                color = reward.color,
+                args = {"🔥 STREAK", reward.message}
+            })
+            break
+        end
     end
     
     -- Sauvegarder les statistiques
@@ -303,27 +391,27 @@ AddEventHandler('kd:onDeath', function(killerName, weapon, headshot)
     end
     
     -- Effet sonore de mort
-    PlaySoundFrontend(-1, "CHECKPOINT_MISSED", "HUD_MINI_GAME_SOUNDSET", 1)
+    PlaySoundFrontend(-1, Config.KDSounds.death.sound, Config.KDSounds.death.set, 1)
     
     -- Message de kill feed
     local deathMessage = string.format("☠️ Tué par %s", killerName or "Joueur")
-    if headshot then
+    if headshot and Config.KDHud.showHeadshots then
         deathMessage = deathMessage .. " 🎯"
     end
     
     table.insert(killFeedMessages, {
         text = deathMessage,
-        time = GetGameTimer(),
-        color = hudConfig.deathColor
+        startTime = GetGameTimer(),
+        color = hudConfig.colors.deaths
     })
     
     -- Indicateur de mort
     table.insert(damageIndicators, {
-        text = "MORT",
+        text = headshot and "HEADSHOT MORT" or "MORT",
         x = 0.5,
         y = 0.5,
-        time = GetGameTimer(),
-        color = hudConfig.deathColor
+        startTime = GetGameTimer(),
+        color = hudConfig.colors.deaths
     })
     
     -- Sauvegarder les statistiques
@@ -340,8 +428,8 @@ AddEventHandler('kd:onAssist', function(victimName, damage)
     
     table.insert(killFeedMessages, {
         text = assistMessage,
-        time = GetGameTimer(),
-        color = hudConfig.assistColor
+        startTime = GetGameTimer(),
+        color = hudConfig.colors.assists
     })
     
     -- Indicateur d'assistance
@@ -349,12 +437,12 @@ AddEventHandler('kd:onAssist', function(victimName, damage)
         text = "ASSIST!",
         x = 0.5,
         y = 0.45,
-        time = GetGameTimer(),
-        color = hudConfig.assistColor
+        startTime = GetGameTimer(),
+        color = hudConfig.colors.assists
     })
     
     -- Son d'assistance
-    PlaySoundFrontend(-1, "CHECKPOINT_NORMAL", "HUD_MINI_GAME_SOUNDSET", 1)
+    PlaySoundFrontend(-1, Config.KDSounds.assist.sound, Config.KDSounds.assist.set, 1)
     
     -- Sauvegarder les statistiques
     TriggerServerEvent('kd:updateStats', playerStats)
@@ -366,7 +454,8 @@ end)
 
 -- Événement de changement de zone (intégration avec le système existant)
 AddEventHandler('vmenu:zoneRestriction', function(inZone, zoneData)
-    showKDHud = inZone
+    isInPvPZone = inZone
+    showKDHud = inZone and Config.KDHud.autoShow
     
     if inZone then
         -- Réinitialiser le temps de session PvP
@@ -375,7 +464,7 @@ AddEventHandler('vmenu:zoneRestriction', function(inZone, zoneData)
         -- Notification d'entrée en mode PvP
         TriggerEvent('chat:addMessage', {
             color = {52, 152, 219},
-            args = {"🎯 PVP MODE", "Statistiques K/D activées"}
+            args = {"🎯 PVP MODE", "Système K/D activé - Tapez /stats pour voir vos statistiques"}
         })
     else
         -- Calculer le temps passé en PvP
@@ -385,15 +474,19 @@ AddEventHandler('vmenu:zoneRestriction', function(inZone, zoneData)
         -- Afficher un résumé de session si des actions ont eu lieu
         if playerStats.kills > 0 or playerStats.deaths > 0 then
             local kd = calculateKD()
+            local kda = calculateKDA()
             TriggerEvent('chat:addMessage', {
                 color = {46, 204, 113},
                 multiline = true,
                 args = {"📊 RÉSUMÉ SESSION", string.format(
-                    "Kills: %d | Deaths: %d | K/D: %.2f\nTemps: %s",
-                    playerStats.kills, playerStats.deaths, kd, formatSessionTime()
+                    "💀 Kills: %d | ☠️ Deaths: %d | 🤝 Assists: %d\n📊 K/D: %.2f | 📈 KDA: %.2f | ⏱️ Temps: %s",
+                    playerStats.kills, playerStats.deaths, playerStats.assists, kd, kda, formatSessionTime()
                 )}
             })
         end
+        
+        -- Sauvegarder les statistiques finales
+        TriggerServerEvent('kd:updateStats', playerStats)
     end
 end)
 
@@ -404,10 +497,11 @@ end)
 -- Thread principal pour l'affichage du HUD
 Citizen.CreateThread(function()
     while true do
-        if showKDHud then
+        if showKDHud and isInPvPZone then
             drawKDHud()
             drawDamageIndicators()
             drawKillFeed()
+            drawStreakMessages()
             Citizen.Wait(0)
         else
             Citizen.Wait(500)
@@ -415,11 +509,27 @@ Citizen.CreateThread(function()
     end
 end)
 
--- Thread pour la détection des dégâts et kills
+-- Thread pour la détection automatique des kills/deaths
 Citizen.CreateThread(function()
+    local lastHealth = 0
+    local lastArmour = 0
+    
     while true do
-        if showKDHud then
+        if isInPvPZone then
             local playerPed = PlayerPedId()
+            local currentHealth = GetEntityHealth(playerPed)
+            local currentArmour = GetPedArmour(playerPed)
+            
+            -- Détecter les dégâts reçus
+            if lastHealth > 0 and currentHealth < lastHealth then
+                local damage = lastHealth - currentHealth
+                playerStats.totalDamageReceived = playerStats.totalDamageReceived + damage
+            end
+            
+            if lastArmour > 0 and currentArmour < lastArmour then
+                local armourDamage = lastArmour - currentArmour
+                playerStats.totalDamageReceived = playerStats.totalDamageReceived + armourDamage
+            end
             
             -- Vérifier si le joueur a été tué
             if IsEntityDead(playerPed) then
@@ -436,7 +546,7 @@ Citizen.CreateThread(function()
                 end
                 
                 -- Vérifier si c'est un headshot
-                local headshot = HasEntityBeenDamagedByWeapon(playerPed, weapon, 2) -- Head component
+                local headshot = HasEntityBeenDamagedByWeapon(playerPed, weapon, 2)
                 
                 TriggerEvent('kd:onDeath', killerPlayer, weapon, headshot)
                 
@@ -444,6 +554,13 @@ Citizen.CreateThread(function()
                 while IsEntityDead(playerPed) do
                     Citizen.Wait(1000)
                 end
+                
+                -- Réinitialiser les valeurs de santé
+                lastHealth = GetEntityHealth(PlayerPedId())
+                lastArmour = GetPedArmour(PlayerPedId())
+            else
+                lastHealth = currentHealth
+                lastArmour = currentArmour
             end
             
             Citizen.Wait(100)
@@ -462,32 +579,48 @@ RegisterCommand("stats", function()
     local kd = calculateKD()
     local kda = calculateKDA()
     local sessionTime = formatSessionTime()
+    local headshotRate = playerStats.kills > 0 and math.floor((playerStats.headshots / playerStats.kills) * 100) or 0
     
     TriggerEvent('chat:addMessage', {
         color = {52, 152, 219},
         multiline = true,
         args = {"📊 MES STATISTIQUES", string.format(
-            "💀 Kills: %d | ☠️ Deaths: %d | 🤝 Assists: %d\n" ..
-            "📊 K/D: %.2f | 📈 KDA: %.2f\n" ..
-            "🔥 Streak: %d | 🏆 Meilleure: %d\n" ..
-            "⏱️ Session: %s",
-            playerStats.kills, playerStats.deaths, playerStats.assists,
-            kd, kda, playerStats.streak, playerStats.bestStreak, sessionTime
+            "💀 Kills: %d | ☠️ Deaths: %d | 🤝 Assists: %d | 🎯 Headshots: %d\n" ..
+            "📊 K/D: %.2f | 📈 KDA: %.2f | 🎯 Headshot%%: %d%%\n" ..
+            "🔥 Streak actuelle: %d | 🏆 Meilleure streak: %d\n" ..
+            "⏱️ Temps de session: %s | 💥 Multikills: %d",
+            playerStats.kills, playerStats.deaths, playerStats.assists, playerStats.headshots,
+            kd, kda, headshotRate, playerStats.streak, playerStats.bestStreak, 
+            sessionTime, playerStats.multikills
         )}
     })
 end, false)
 
 -- Commande pour réinitialiser les statistiques de session
 RegisterCommand("resetstats", function()
+    local oldStats = {
+        kills = playerStats.kills,
+        deaths = playerStats.deaths,
+        assists = playerStats.assists
+    }
+    
     playerStats.kills = 0
     playerStats.deaths = 0
     playerStats.assists = 0
     playerStats.streak = 0
+    playerStats.headshots = 0
+    playerStats.multikills = 0
     playerStats.sessionStart = GetGameTimer()
+    playerStats.totalDamageDealt = 0
+    playerStats.totalDamageReceived = 0
     
     TriggerEvent('chat:addMessage', {
         color = {241, 196, 15},
-        args = {"🔄 RESET", "Statistiques de session réinitialisées"}
+        multiline = true,
+        args = {"🔄 RESET", string.format(
+            "Statistiques de session réinitialisées\nAnciens stats: %d kills, %d deaths, %d assists",
+            oldStats.kills, oldStats.deaths, oldStats.assists
+        )}
     })
 end, false)
 
@@ -500,13 +633,47 @@ RegisterCommand("togglekd", function()
     })
 end, false)
 
+-- Commande pour ajuster la position du HUD
+RegisterCommand("movekd", function(source, args)
+    if not args[1] or not args[2] then
+        TriggerEvent('chat:addMessage', {
+            color = {255, 255, 0},
+            args = {"[Usage]", "/movekd <x> <y> (valeurs entre 0.0 et 1.0)"}
+        })
+        return
+    end
+    
+    local x = tonumber(args[1])
+    local y = tonumber(args[2])
+    
+    if x and y and x >= 0.0 and x <= 1.0 and y >= 0.0 and y <= 1.0 then
+        hudPosition.x = x
+        hudPosition.y = y
+        TriggerEvent('chat:addMessage', {
+            color = {46, 204, 113},
+            args = {"🎯 HUD K/D", string.format("Position mise à jour: %.2f, %.2f", x, y)}
+        })
+    else
+        TriggerEvent('chat:addMessage', {
+            color = {231, 76, 60},
+            args = {"[Erreur]", "Valeurs invalides. Utilisez des nombres entre 0.0 et 1.0"}
+        })
+    end
+end, false)
+
 -- ====================================================================
 -- INITIALISATION ET NETTOYAGE
 -- ====================================================================
 
 -- Charger les statistiques sauvegardées au démarrage
 AddEventHandler('playerSpawned', function()
-    TriggerServerEvent('kd:loadStats')
+    if Config.KDSave.enablePersistence then
+        TriggerServerEvent('kd:loadStats')
+    end
+    
+    -- Réinitialiser les variables d'affichage
+    showKDHud = Config.KDHud.autoShow
+    isInPvPZone = false
 end)
 
 -- Événement pour recevoir les statistiques du serveur
@@ -517,9 +684,16 @@ AddEventHandler('kd:receiveStats', function(stats)
         playerStats.deaths = stats.deaths or 0
         playerStats.assists = stats.assists or 0
         playerStats.bestStreak = stats.bestStreak or 0
+        playerStats.headshots = stats.headshots or 0
+        playerStats.multikills = stats.multikills or 0
         playerStats.timeInPvP = stats.timeInPvP or 0
         playerStats.totalDamageDealt = stats.totalDamageDealt or 0
         playerStats.totalDamageReceived = stats.totalDamageReceived or 0
+        
+        TriggerEvent('chat:addMessage', {
+            color = {46, 204, 113},
+            args = {"📊 K/D", "Statistiques chargées avec succès"}
+        })
     end
 end)
 
@@ -527,6 +701,15 @@ end)
 AddEventHandler('onResourceStop', function(resourceName)
     if GetCurrentResourceName() == resourceName then
         -- Sauvegarder les statistiques finales
-        TriggerServerEvent('kd:updateStats', playerStats)
+        if Config.KDSave.enablePersistence then
+            TriggerServerEvent('kd:updateStats', playerStats)
+        end
+        
+        -- Nettoyer les variables
+        showKDHud = false
+        isInPvPZone = false
+        damageIndicators = {}
+        killFeedMessages = {}
+        streakMessages = {}
     end
 end)
