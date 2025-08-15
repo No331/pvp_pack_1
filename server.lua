@@ -1,109 +1,151 @@
--- server.lua for pvp_pack
-local players = {}
-local arenaPlayers = {}
+-- Script serveur pour la gestion des logs et événements
 
--- helper to get arena data
-local function getArena(index)
-    return Config.Arenas[index]
-end
+-- Table pour suivre les joueurs dans les zones restreintes
+local playersInZones = {}
 
--- renvoie si un joueur est en arène
-local function isInArena(src)
-    return players[src] and players[src].arena ~= nil
-end
-
-RegisterNetEvent('pvp:joinArena')
-AddEventHandler('pvp:joinArena', function(arenaIndex)
+-- Événement quand un joueur entre dans une zone restreinte
+RegisterNetEvent('vmenu:playerEnteredRestrictedZone')
+AddEventHandler('vmenu:playerEnteredRestrictedZone', function(zoneName)
     local src = source
-    print("Server: Received joinArena request from player " .. src .. " for arena " .. tostring(arenaIndex))
-    local a = getArena(arenaIndex)
+    local playerName = GetPlayerName(src)
     
-    if not a then 
-        print("Server: Arena " .. tostring(arenaIndex) .. " not found")
-        print("Server: Available arenas:", json.encode(Config.Arenas))
-        return 
-    end
+    -- Enregistrer le joueur comme étant dans une zone
+    playersInZones[src] = {
+        zoneName = zoneName,
+        enterTime = os.time()
+    }
     
-    print("Server: Arena found:", json.encode(a))
+    -- Log pour les administrateurs
+    print(string.format("[vMenu Zone] %s (ID: %d) est entré dans la zone: %s", 
+          playerName, src, zoneName))
     
-    -- Initialiser le joueur
-    players[src] = {arena = arenaIndex, kills = 0, deaths = 0, vMenuDisabled = true}
-    arenaPlayers[arenaIndex] = arenaPlayers[arenaIndex] or {}
-    arenaPlayers[arenaIndex][src] = true
-    
-    print("Server: Player " .. src .. " joining arena " .. a.name)
-    
-    -- Téléporter le joueur et donner l'arme
-    print("Server: Triggering forceJoinClient for player " .. src)
-    TriggerClientEvent('pvp:forceJoinClient', src, arenaIndex, a)
+    -- Optionnel: Envoyer une notification aux admins connectés
+    TriggerEvent('vmenu:notifyAdmins', playerName .. " est entré dans " .. zoneName)
 end)
 
-RegisterNetEvent('pvp:playerEnteredArena')
-AddEventHandler('pvp:playerEnteredArena', function(arenaIndex)
+-- Événement quand un joueur sort d'une zone restreinte
+RegisterNetEvent('vmenu:playerExitedRestrictedZone')
+AddEventHandler('vmenu:playerExitedRestrictedZone', function()
     local src = source
-    print("Server: Player " .. src .. " entered arena " .. tostring(arenaIndex))
-    players[src] = players[src] or {arena = arenaIndex, kills = 0, deaths = 0, vMenuDisabled = true}
-end)
-
-RegisterNetEvent('pvp:playerDied')
-AddEventHandler('pvp:playerDied', function(killerServerId, arenaIndex)
-    local victim = source
-    arenaIndex = arenaIndex or (players[victim] and players[victim].arena)
-    if not arenaIndex then return end
-
-    players[victim] = players[victim] or {arena = arenaIndex, kills = 0, deaths = 0, vMenuDisabled = true}
-    players[victim].deaths = players[victim].deaths + 1
-
-    print("Server: Player " .. victim .. " died in arena " .. tostring(arenaIndex))
-
-    -- if killer is valid and tracked, award kill
-    if killerServerId and killerServerId ~= 0 and players[killerServerId] then
-        players[killerServerId].kills = players[killerServerId].kills + 1
-        print("Server: Player " .. killerServerId .. " got a kill")
-        -- update killer HUD
-        TriggerClientEvent('pvp:updateHud', killerServerId, players[killerServerId].kills, players[killerServerId].deaths)
-    end
-
-    -- update victim HUD
-    TriggerClientEvent('pvp:updateHud', victim, players[victim].kills, players[victim].deaths)
-
-    -- respawn victim in arena
-    local a = getArena(arenaIndex)
-    if a then
-        TriggerClientEvent('pvp:respawnInArenaClient', victim, arenaIndex, a)
+    local playerName = GetPlayerName(src)
+    
+    if playersInZones[src] then
+        local timeInZone = os.time() - playersInZones[src].enterTime
+        local zoneName = playersInZones[src].zoneName
+        
+        -- Log de sortie
+        print(string.format("[vMenu Zone] %s (ID: %d) a quitté la zone: %s (Durée: %d secondes)", 
+              playerName, src, zoneName, timeInZone))
+        
+        -- Supprimer de la table
+        playersInZones[src] = nil
     end
 end)
 
--- Commande serveur pour bloquer vMenu/noclip
-RegisterCommand("checkVMenu", function(source, args, raw)
-    local src = source
-    if isInArena(src) then
-        TriggerClientEvent('vMenu:disableMenu', src, true)
-    else
-        TriggerClientEvent('vMenu:disableMenu', src, false)
-    end
-end, false)
-
+-- Nettoyage quand un joueur se déconnecte
 AddEventHandler('playerDropped', function(reason)
     local src = source
-    if players[src] then
-        local arena = players[src].arena
-        if arena and arenaPlayers[arena] then
-            arenaPlayers[arena][src] = nil
-        end
-        players[src] = nil
-        print("Server: Player " .. src .. " disconnected and removed from PvP")
+    if playersInZones[src] then
+        local playerName = GetPlayerName(src)
+        local zoneName = playersInZones[src].zoneName
+        
+        print(string.format("[vMenu Zone] %s (ID: %d) s'est déconnecté depuis la zone: %s", 
+              playerName, src, zoneName))
+        
+        playersInZones[src] = nil
     end
 end)
 
--- Boucle serveur pour maintenir vMenu désactivé si joueur en arène
-Citizen.CreateThread(function()
-    while true do
-        Citizen.Wait(5000) -- check toutes les 5 secondes
-        for src,_ in pairs(players) do
-            if isInArena(src) then
-                TriggerClientEvent('vMenu:disableMenu', src, true)
-            end
+-- Commande admin pour voir qui est dans les zones
+RegisterCommand("zonestatus", function(source, args, rawCommand)
+    local src = source
+    
+    -- Vérifier si c'est un admin (vous pouvez adapter selon votre système de permissions)
+    if not IsPlayerAceAllowed(src, "command.zonestatus") then
+        TriggerClientEvent('chat:addMessage', src, {
+            color = {255, 0, 0},
+            args = {"[Erreur]", "Vous n'avez pas la permission d'utiliser cette commande."}
+        })
+        return
+    end
+    
+    local count = 0
+    local message = "Joueurs dans les zones restreintes:\n"
+    
+    for playerId, data in pairs(playersInZones) do
+        local playerName = GetPlayerName(playerId)
+        if playerName then
+            local timeInZone = os.time() - data.enterTime
+            message = message .. string.format("- %s (ID: %d) dans %s depuis %d secondes\n", 
+                     playerName, playerId, data.zoneName, timeInZone)
+            count = count + 1
+        end
+    end
+    
+    if count == 0 then
+        message = "Aucun joueur dans les zones restreintes."
+    end
+    
+    TriggerClientEvent('chat:addMessage', src, {
+        color = {0, 255, 255},
+        args = {"[Zone Status]", message}
+    })
+end, true) -- true = commande restreinte
+
+-- Fonction utilitaire pour notifier les admins (optionnelle)
+RegisterNetEvent('vmenu:notifyAdmins')
+AddEventHandler('vmenu:notifyAdmins', function(message)
+    local players = GetPlayers()
+    
+    for _, playerId in ipairs(players) do
+        -- Vérifier si le joueur est admin
+        if IsPlayerAceAllowed(playerId, "vmenu.notify") then
+            TriggerClientEvent('chat:addMessage', playerId, {
+                color = {255, 165, 0},
+                args = {"[Zone Admin]", message}
+            })
         end
     end
 end)
+
+-- Statistiques et monitoring
+local zoneStats = {
+    totalEntries = 0,
+    totalExits = 0,
+    currentPlayers = 0
+}
+
+-- Mise à jour des statistiques
+AddEventHandler('vmenu:playerEnteredRestrictedZone', function()
+    zoneStats.totalEntries = zoneStats.totalEntries + 1
+    zoneStats.currentPlayers = zoneStats.currentPlayers + 1
+end)
+
+AddEventHandler('vmenu:playerExitedRestrictedZone', function()
+    zoneStats.totalExits = zoneStats.totalExits + 1
+    zoneStats.currentPlayers = math.max(0, zoneStats.currentPlayers - 1)
+end)
+
+-- Commande pour voir les statistiques
+RegisterCommand("zonestats", function(source, args, rawCommand)
+    local src = source
+    
+    if not IsPlayerAceAllowed(src, "command.zonestats") then
+        return
+    end
+    
+    local message = string.format(
+        "Statistiques des zones:\n" ..
+        "- Entrées totales: %d\n" ..
+        "- Sorties totales: %d\n" ..
+        "- Joueurs actuels: %d",
+        zoneStats.totalEntries,
+        zoneStats.totalExits,
+        zoneStats.currentPlayers
+    )
+    
+    TriggerClientEvent('chat:addMessage', src, {
+        color = {0, 255, 0},
+        args = {"[Zone Stats]", message}
+    })
+end, true)
